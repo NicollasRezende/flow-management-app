@@ -1,6 +1,4 @@
-Coletando informações do workspace# Flow Management App
-
-Este é um aplicativo de gerenciamento de fluxo de menus, desenvolvido com React, TypeScript e React Flow Renderer. Ele permite criar, editar e visualizar fluxos de menus interativos.
+# Este é um aplicativo de gerenciamento de fluxo de menus, desenvolvido com React, TypeScript e React Flow Renderer. Ele permite criar, editar e visualizar fluxos de menus interativos.
 
 ## Estrutura do Projeto
 
