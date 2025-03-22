@@ -8,7 +8,8 @@ import {
     PhotographIcon,
     LinkIcon,
     PhoneIcon,
-    MailIcon,
+    DotsHorizontalIcon,
+    TrashIcon,
 } from '@heroicons/react/outline';
 
 interface MenuNodeData {
@@ -20,11 +21,13 @@ interface MenuNodeData {
     formType?: string;
     extraActions?: any[];
     onEdit: () => void;
+    onDelete?: (id: string) => void; // Nova prop para deleção
 }
 
 const MenuNodeComponent: React.FC<NodeProps<MenuNodeData>> = ({
     data,
     isConnectable,
+    selected,
 }) => {
     const {
         menuId,
@@ -33,24 +36,28 @@ const MenuNodeComponent: React.FC<NodeProps<MenuNodeData>> = ({
         formType,
         extraActions = [],
         onEdit,
+        onDelete,
     } = data;
 
     // Determine node color based on menu type
-    let bgColor = 'bg-white';
-    let borderColor = 'border-gray-200';
+    let nodeClass = 'node-default';
 
     switch (menuType) {
         case 'button':
-            bgColor = 'bg-blue-50';
-            borderColor = 'border-blue-200';
+            nodeClass = 'node-button';
             break;
         case 'list':
-            bgColor = 'bg-green-50';
-            borderColor = 'border-green-200';
+            nodeClass = 'node-list';
             break;
         default:
-            bgColor = 'bg-gray-50';
-            borderColor = 'border-gray-200';
+            nodeClass = 'node-default';
+    }
+
+    // Badge style based on menu type
+    let badgeClass = 'menu-badge menu-badge-button';
+
+    if (menuType === 'list') {
+        badgeClass = 'menu-badge menu-badge-list';
     }
 
     // Count number of buttons or list items
@@ -114,9 +121,30 @@ const MenuNodeComponent: React.FC<NodeProps<MenuNodeData>> = ({
         });
     }
 
+    // Manipulador para deletar menu
+    const handleDelete = (event: React.MouseEvent) => {
+        event.stopPropagation(); // Evita que o clique propague e abra o editor
+
+        if (onDelete && menuId !== 'initial') {
+            // Impedir deleção do menu inicial
+            // Confirmar antes de deletar
+            if (
+                window.confirm(
+                    `Tem certeza que deseja excluir o menu "${title}"?`
+                )
+            ) {
+                onDelete(menuId);
+            }
+        } else if (menuId === 'initial') {
+            alert('O menu inicial não pode ser excluído.');
+        }
+    };
+
     return (
         <div
-            className={`px-4 py-3 rounded-lg shadow border-2 ${bgColor} ${borderColor} min-w-[200px]`}
+            className={`px-4 py-3 rounded-lg shadow border-2 ${nodeClass} min-w-[220px] ${
+                selected ? 'border-indigo-500 shadow-md' : ''
+            }`}
             onClick={onEdit}
         >
             <Handle
@@ -126,44 +154,61 @@ const MenuNodeComponent: React.FC<NodeProps<MenuNodeData>> = ({
                 className="w-3 h-3"
             />
 
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between mb-2">
                 <div className="font-medium text-gray-800 truncate max-w-[150px]">
                     {title}
                 </div>
-                <div className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
-                    {menuId}
+                <div className="flex items-center space-x-1">
+                    <div className={badgeClass}>{menuId}</div>
+                    {onDelete && (
+                        <button
+                            onClick={handleDelete}
+                            className="ml-2 p-1 text-gray-500 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors duration-200"
+                            title="Excluir menu"
+                        >
+                            <TrashIcon className="h-4 w-4" />
+                        </button>
+                    )}
                 </div>
             </div>
 
-            <div className="mt-2 text-xs text-gray-500">
-                <div className="flex items-center space-x-1">
-                    <CollectionIcon className="h-4 w-4" />
-                    <span>
+            <div className="mt-2 text-xs text-gray-600 space-y-2">
+                <div className="flex items-center space-x-1.5">
+                    <CollectionIcon className="h-4 w-4 text-indigo-500" />
+                    <span className="font-medium">
                         {menuType === 'button'
                             ? 'Botões'
                             : menuType === 'list'
                             ? 'Lista'
                             : menuType}
-                        {optionsCount > 0 && ` (${optionsCount})`}
+                        {optionsCount > 0 && (
+                            <span className="ml-1 bg-gray-200 text-gray-700 px-1.5 py-0.5 rounded-full text-xs">
+                                {optionsCount}
+                            </span>
+                        )}
                     </span>
                 </div>
 
                 {hasForm && (
-                    <div className="mt-1">
-                        <DocumentTextIcon className="h-4 w-4 inline mr-1" />
+                    <div className="flex items-center space-x-1.5">
+                        <DocumentTextIcon className="h-4 w-4 text-yellow-500" />
                         <span>Formulário: {formType}</span>
                     </div>
                 )}
 
                 {actionIcons.length > 0 && (
-                    <div className="mt-1 flex items-center space-x-1">
-                        <span className="mr-1">Ações:</span>
-                        {actionIcons.slice(0, 3)}
-                        {actionIcons.length > 3 && (
-                            <span className="text-xs text-gray-500">
-                                +{actionIcons.length - 3}
-                            </span>
-                        )}
+                    <div className="flex items-center mt-1.5 pt-1.5 border-t border-gray-200">
+                        <span className="text-xs text-gray-500 mr-2">
+                            Ações:
+                        </span>
+                        <div className="flex space-x-1.5">
+                            {actionIcons.slice(0, 3)}
+                            {actionIcons.length > 3 && (
+                                <div className="flex items-center justify-center h-4 w-4 bg-gray-200 rounded-full text-xs text-gray-700">
+                                    <DotsHorizontalIcon className="h-3 w-3" />
+                                </div>
+                            )}
+                        </div>
                     </div>
                 )}
             </div>

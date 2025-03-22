@@ -26,8 +26,10 @@ interface MenuFlowEditorProps {
     menuData: Record<string, any>;
     onSave: (data: Record<string, any>) => void;
     onAddMenu?: (menuId: string, menuType: string) => void;
+    onDeleteMenu?: (menuId: string) => void; // Nova propriedade para deleção de menus
     onImportJson?: (jsonData: any) => void;
     onExportJson?: () => void;
+    isSaving?: boolean;
 }
 
 // Tipos de notificação para feedback visual
@@ -43,8 +45,10 @@ const MenuFlowEditor: React.FC<MenuFlowEditorProps> = ({
     menuData,
     onSave,
     onAddMenu,
+    onDeleteMenu,
     onImportJson,
     onExportJson,
+    isSaving: externalIsSaving = false,
 }) => {
     const [nodes, setNodes, onNodesChange] = useNodesState([]);
     const [edges, setEdges, onEdgesChange] = useEdgesState([]);
@@ -52,7 +56,10 @@ const MenuFlowEditor: React.FC<MenuFlowEditorProps> = ({
     const [menuContentChanged, setMenuContentChanged] =
         useState<boolean>(false);
     const [showMiniMap, setShowMiniMap] = useState(true);
-    const [isSaving, setIsSaving] = useState(false);
+    const [internalIsSaving, setInternalIsSaving] = useState(false);
+
+    // Combinamos o estado de salvamento externo (passado via props) com o interno
+    const effectivelySaving = externalIsSaving || internalIsSaving;
 
     // Estado para notificações
     const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -73,6 +80,38 @@ const MenuFlowEditor: React.FC<MenuFlowEditorProps> = ({
             }, 5000);
         },
         [notificationIdCounter]
+    );
+
+    // Função para deletar um menu
+    const handleDeleteMenu = useCallback(
+        (menuId: string) => {
+            console.log('MenuFlowEditor - handleDeleteMenu:', menuId);
+
+            // Se o menu estiver selecionado, limpar a seleção
+            if (selectedNode && selectedNode.id === menuId) {
+                setSelectedNode(null);
+            }
+
+            // Remover nós e arestas associadas
+            setNodes((nds) => nds.filter((node) => node.id !== menuId));
+            setEdges((eds) =>
+                eds.filter(
+                    (edge) => edge.source !== menuId && edge.target !== menuId
+                )
+            );
+
+            // Marcar como alterado para salvar
+            setMenuContentChanged(true);
+
+            // Notificar o usuário
+            addNotification('info', `Menu "${menuId}" excluído`);
+
+            // Se houver callback externo para deleção, chamá-lo
+            if (onDeleteMenu) {
+                onDeleteMenu(menuId);
+            }
+        },
+        [selectedNode, setNodes, setEdges, addNotification, onDeleteMenu]
     );
 
     // Convert menu data to ReactFlow nodes
@@ -124,6 +163,7 @@ const MenuFlowEditor: React.FC<MenuFlowEditorProps> = ({
                             setSelectedNode(
                                 menuNodes.find((n) => n.id === menuId) || null
                             ),
+                        onDelete: handleDeleteMenu, // Adicionamos a função de deleção aqui
                     },
                     position: positions[menuId],
                 });
@@ -193,12 +233,22 @@ const MenuFlowEditor: React.FC<MenuFlowEditorProps> = ({
         );
         setNodes(menuNodes);
         setEdges(menuEdges);
-    }, [menuData]);
+    }, [menuData, handleDeleteMenu]);
 
     const onConnect = useCallback(
         (params: Connection) => {
             console.log('MenuFlowEditor - Conexão criada:', params);
-            setEdges((eds) => addEdge({ ...params, animated: true }, eds));
+            setEdges((eds) =>
+                addEdge(
+                    {
+                        ...params,
+                        animated: true,
+                        type: 'smoothstep',
+                        style: { stroke: '#4f46e5', strokeWidth: 2 },
+                    },
+                    eds
+                )
+            );
             setMenuContentChanged(true); // Marcar como alterado ao adicionar conexão
         },
         [setEdges]
@@ -223,6 +273,7 @@ const MenuFlowEditor: React.FC<MenuFlowEditorProps> = ({
                             data: {
                                 ...node.data,
                                 ...updatedData,
+                                onDelete: handleDeleteMenu, // Garantir que a função de deleção seja mantida
                             },
                         };
                     }
@@ -244,7 +295,7 @@ const MenuFlowEditor: React.FC<MenuFlowEditorProps> = ({
                 true
             );
         },
-        [setNodes, addNotification]
+        [setNodes, addNotification, handleDeleteMenu]
     );
 
     const handleSaveMenuData = useCallback(() => {
@@ -255,7 +306,7 @@ const MenuFlowEditor: React.FC<MenuFlowEditorProps> = ({
         );
 
         // Evitar múltiplos salvamentos simultâneos
-        if (isSaving) {
+        if (effectivelySaving) {
             console.log(
                 'MenuFlowEditor - Salvamento já em andamento, ignorando chamada'
             );
@@ -264,29 +315,31 @@ const MenuFlowEditor: React.FC<MenuFlowEditorProps> = ({
         }
 
         try {
-            setIsSaving(true);
+            setInternalIsSaving(true);
             addNotification('info', 'Salvando alterações...');
             console.log('MenuFlowEditor - Preparando dados para salvar');
+
+            // Criar um novo objeto de dados (para não modificar o original)
             const updatedMenuData = { ...menuData };
 
-            // Update the menu data with changes from nodes
+            // Resetar o objeto de menus para conter apenas os menus que existem nos nós
+            updatedMenuData.menus = {};
+
+            // Update the menu data with changes from nodes - agora só inclui os menus existentes
             nodes.forEach((node) => {
-                if (node.id in updatedMenuData.menus) {
-                    updatedMenuData.menus[node.id] = {
-                        ...updatedMenuData.menus[node.id],
-                        title: node.data.title,
-                        content: node.data.content,
-                        options: node.data.options,
-                        form: node.data.formType
-                            ? {
-                                  type: node.data.formType,
-                                  submit_text: 'Enviar',
-                                  action: 'submit_form',
-                              }
-                            : undefined,
-                        extra_actions: node.data.extraActions,
-                    };
-                }
+                updatedMenuData.menus[node.id] = {
+                    title: node.data.title,
+                    content: node.data.content,
+                    options: node.data.options,
+                    form: node.data.formType
+                        ? {
+                              type: node.data.formType,
+                              submit_text: 'Enviar',
+                              action: 'submit_form',
+                          }
+                        : undefined,
+                    extra_actions: node.data.extraActions,
+                };
             });
 
             // Update connections in the menu data
@@ -332,7 +385,7 @@ const MenuFlowEditor: React.FC<MenuFlowEditorProps> = ({
                     'error',
                     'Erro ao salvar: função de salvamento não está disponível'
                 );
-                setIsSaving(false);
+                setInternalIsSaving(false);
                 return;
             }
 
@@ -354,7 +407,7 @@ const MenuFlowEditor: React.FC<MenuFlowEditorProps> = ({
                     }`
                 );
             } finally {
-                setIsSaving(false);
+                setInternalIsSaving(false);
             }
         } catch (error) {
             console.error(
@@ -367,7 +420,7 @@ const MenuFlowEditor: React.FC<MenuFlowEditorProps> = ({
                     (error as Error).message || 'Falha desconhecida'
                 }`
             );
-            setIsSaving(false);
+            setInternalIsSaving(false);
         }
     }, [
         menuData,
@@ -375,7 +428,7 @@ const MenuFlowEditor: React.FC<MenuFlowEditorProps> = ({
         edges,
         menuContentChanged,
         onSave,
-        isSaving,
+        effectivelySaving,
         addNotification,
     ]);
 
@@ -402,33 +455,23 @@ const MenuFlowEditor: React.FC<MenuFlowEditorProps> = ({
         return () => (
             <div className="fixed top-4 right-4 z-50 flex flex-col gap-2 max-w-md">
                 {notifications.map((notification) => {
-                    // Definir estilos baseados no tipo de notificação
-                    const bgColor =
-                        notification.type === 'success'
-                            ? 'bg-green-500'
-                            : notification.type === 'error'
-                            ? 'bg-red-500'
-                            : notification.type === 'warning'
-                            ? 'bg-yellow-500'
-                            : 'bg-blue-500';
-
-                    const icon =
-                        notification.type === 'success'
-                            ? '✅'
-                            : notification.type === 'error'
-                            ? '❌'
-                            : notification.type === 'warning'
-                            ? '⚠️'
-                            : 'ℹ️';
+                    // Definir classes baseadas no tipo de notificação
+                    const notificationClass = `notification notification-${notification.type}`;
 
                     return (
                         <div
                             key={notification.id}
-                            className={`${bgColor} text-white py-3 px-4 rounded-lg shadow-lg flex items-start transition-opacity duration-300 animate-fadeIn`}
-                            style={{ animation: 'fadeIn 0.3s ease-in-out' }}
+                            className={notificationClass}
                         >
-                            <span className="mr-2">{icon}</span>
-                            <span>{notification.message}</span>
+                            <span className="mr-2">
+                                {notification.type === 'success' && '✅'}
+                                {notification.type === 'error' && '❌'}
+                                {notification.type === 'warning' && '⚠️'}
+                                {notification.type === 'info' && 'ℹ️'}
+                            </span>
+                            <span className="flex-grow">
+                                {notification.message}
+                            </span>
                             <button
                                 onClick={() =>
                                     setNotifications((prev) =>
@@ -437,7 +480,7 @@ const MenuFlowEditor: React.FC<MenuFlowEditorProps> = ({
                                         )
                                     )
                                 }
-                                className="ml-auto pl-2 text-white hover:text-gray-200"
+                                className="ml-2 text-white hover:text-gray-200 focus:outline-none"
                             >
                                 ×
                             </button>
@@ -448,22 +491,8 @@ const MenuFlowEditor: React.FC<MenuFlowEditorProps> = ({
         );
     }, [notifications]);
 
-    // Estilos para animação
-    const animationStyles = `
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(-10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        .animate-fadeIn {
-            animation: fadeIn 0.3s ease-in-out;
-        }
-    `;
-
     return (
         <div className="h-screen flex flex-col">
-            {/* Estilos para animações */}
-            <style>{animationStyles}</style>
-
             {/* Componente de notificações */}
             <NotificationDisplay />
 
@@ -474,7 +503,7 @@ const MenuFlowEditor: React.FC<MenuFlowEditorProps> = ({
                 onToggleMiniMap={toggleMiniMap}
                 showMiniMap={showMiniMap}
                 onExportJson={onExportJson}
-                isSaving={isSaving}
+                isSaving={effectivelySaving}
             />
 
             <div className="flex-grow relative">
@@ -486,36 +515,40 @@ const MenuFlowEditor: React.FC<MenuFlowEditorProps> = ({
                     onConnect={onConnect}
                     onNodeClick={onNodeClick}
                     nodeTypes={nodeTypes}
-                    connectionLineType={ConnectionLineType.Bezier}
+                    connectionLineType={ConnectionLineType.SmoothStep}
+                    defaultZoom={1}
+                    minZoom={0.2}
+                    maxZoom={2}
+                    snapToGrid={true}
+                    snapGrid={[10, 10]}
                     fitView
                 >
-                    <Background />
-                    <Controls />
+                    <Background color="#aaa" gap={16} size={1} />
+                    <Controls
+                        showInteractive={false}
+                        className="react-flow__controls"
+                    />
                     {showMiniMap && (
                         <div
-                            className="absolute bottom-10 right-10"
+                            className="absolute bottom-4 right-4"
                             style={{ zIndex: 5 }}
                         >
                             <MiniMap
                                 nodeStrokeColor={(n) => {
-                                    if (n.type === 'menuNode') return '#0041d0';
+                                    if (n.type === 'menuNode') return '#4f46e5';
                                     return '#000';
                                 }}
                                 nodeColor={(n) => {
                                     if (n.type === 'menuNode') {
                                         const type =
                                             n.data?.menuType || 'default';
-                                        if (type === 'button') return '#bbdefb';
-                                        if (type === 'list') return '#c8e6c9';
-                                        return '#e1e1e1';
+                                        if (type === 'button') return '#e0e7ff';
+                                        if (type === 'list') return '#dcfce7';
+                                        return '#f3f4f6';
                                     }
-                                    return '#eee';
+                                    return '#f3f4f6';
                                 }}
-                                style={{
-                                    backgroundColor: '#f8f8f8',
-                                    border: '1px solid #ddd',
-                                    borderRadius: '8px',
-                                }}
+                                nodeBorderRadius={3}
                             />
                         </div>
                     )}
@@ -523,7 +556,7 @@ const MenuFlowEditor: React.FC<MenuFlowEditorProps> = ({
 
                 {selectedNode && (
                     <div
-                        className="absolute top-0 right-0 h-full bg-white shadow-lg overflow-y-auto"
+                        className="absolute top-0 right-0 h-full bg-white shadow-xl side-panel"
                         style={{
                             width: panelWidth,
                             zIndex: 10,
@@ -533,6 +566,11 @@ const MenuFlowEditor: React.FC<MenuFlowEditorProps> = ({
                             node={selectedNode}
                             onUpdate={handleUpdateMenu}
                             onClose={handleCloseEditPanel}
+                            onDelete={
+                                selectedNode.id !== 'initial'
+                                    ? handleDeleteMenu
+                                    : undefined
+                            } // Adicionamos a opção de deleção
                         />
                     </div>
                 )}

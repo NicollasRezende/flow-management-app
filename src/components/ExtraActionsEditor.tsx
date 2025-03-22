@@ -1,5 +1,12 @@
 import React, { useState } from 'react';
-import { TrashIcon, PlusIcon } from '@heroicons/react/solid';
+import { TrashIcon, PlusIcon, PencilIcon } from '@heroicons/react/solid';
+import {
+    ChatAlt2Icon,
+    LocationMarkerIcon,
+    PhotographIcon,
+    LinkIcon,
+    PhoneIcon,
+} from '@heroicons/react/outline';
 
 // Tipos de ações extras
 export interface ExtraAction {
@@ -54,6 +61,15 @@ const actionTypeNames: Record<string, string> = {
     image: 'Imagem',
 };
 
+// Ícones para cada tipo de ação
+const actionIcons: Record<string, React.ReactNode> = {
+    message: <ChatAlt2Icon className="h-4 w-4 text-gray-500" />,
+    contact: <PhoneIcon className="h-4 w-4 text-green-500" />,
+    location: <LocationMarkerIcon className="h-4 w-4 text-red-500" />,
+    link: <LinkIcon className="h-4 w-4 text-blue-500" />,
+    image: <PhotographIcon className="h-4 w-4 text-purple-500" />,
+};
+
 const ExtraActionsEditor: React.FC<ExtraActionsEditorProps> = ({
     actions,
     onChange,
@@ -86,7 +102,7 @@ const ExtraActionsEditor: React.FC<ExtraActionsEditorProps> = ({
         const fields = actionFields[action.type] || [];
 
         return (
-            <div className="mt-2 space-y-3">
+            <div className="mt-3 space-y-3 bg-gray-50 p-3 rounded-md border border-gray-200">
                 {fields.map((field) => {
                     const fieldKey =
                         field.key ||
@@ -95,10 +111,10 @@ const ExtraActionsEditor: React.FC<ExtraActionsEditorProps> = ({
 
                     return (
                         <div key={fieldKey} className="flex flex-col">
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                            <label className="form-label">
                                 {field.label}
                                 {field.required && (
-                                    <span className="text-red-500">*</span>
+                                    <span className="text-red-500 ml-1">*</span>
                                 )}
                             </label>
 
@@ -112,7 +128,7 @@ const ExtraActionsEditor: React.FC<ExtraActionsEditorProps> = ({
                                             e.target.value
                                         )
                                     }
-                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                    className="form-textarea"
                                     rows={3}
                                 />
                             ) : (
@@ -126,7 +142,7 @@ const ExtraActionsEditor: React.FC<ExtraActionsEditorProps> = ({
                                             e.target.value
                                         )
                                     }
-                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                    className="form-input"
                                 />
                             )}
                         </div>
@@ -139,82 +155,100 @@ const ExtraActionsEditor: React.FC<ExtraActionsEditorProps> = ({
     return (
         <div className="space-y-4">
             <div className="flex justify-between items-center">
-                <h3 className="text-lg font-medium">Ações Extras</h3>
+                <p className="text-sm text-gray-500">
+                    Adicione ações extras como mensagens, imagens, localização,
+                    etc.
+                </p>
                 <button
                     type="button"
                     onClick={handleAddAction}
-                    className="inline-flex items-center p-1 border border-transparent rounded-full shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                    className="btn btn-primary btn-icon"
                 >
-                    <PlusIcon className="h-5 w-5" aria-hidden="true" />
+                    <PlusIcon className="h-4 w-4" aria-hidden="true" />
                 </button>
             </div>
 
             {actions.length === 0 && (
-                <p className="text-sm text-gray-500 italic">
-                    Nenhuma ação extra configurada. Clique no botão "+" para
-                    adicionar.
-                </p>
+                <div className="bg-gray-50 border border-gray-200 rounded-md p-4 text-center">
+                    <p className="text-sm text-gray-500 italic">
+                        Nenhuma ação extra configurada. Clique no botão "+" para
+                        adicionar.
+                    </p>
+                </div>
             )}
 
-            {actions.map((action, index) => (
-                <div
-                    key={index}
-                    className="border rounded-md p-3 hover:shadow-sm transition"
-                >
-                    <div className="flex justify-between items-center">
-                        <div className="flex items-center space-x-2">
-                            <span className="font-medium">
-                                {index + 1}.{' '}
-                                {actionTypeNames[action.type] || action.type}
-                            </span>
+            <div className="space-y-3">
+                {actions.map((action, index) => (
+                    <div
+                        key={index}
+                        className="border border-gray-200 rounded-md overflow-hidden transition-all duration-150 hover:shadow-sm"
+                    >
+                        <div className="flex justify-between items-center p-3 bg-gray-50 border-b border-gray-200">
+                            <div className="flex items-center space-x-2">
+                                <span className="flex items-center justify-center w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 text-xs font-medium">
+                                    {index + 1}
+                                </span>
+                                <div className="flex items-center space-x-2">
+                                    {actionIcons[action.type]}
+                                    <span className="font-medium text-gray-700">
+                                        {actionTypeNames[action.type] ||
+                                            action.type}
+                                    </span>
+                                </div>
 
-                            <select
-                                value={action.type}
-                                onChange={(e) =>
-                                    handleUpdateAction(
-                                        index,
-                                        'type',
-                                        e.target.value
-                                    )
-                                }
-                                className="ml-2 text-sm border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                            >
-                                {Object.entries(actionTypeNames).map(
-                                    ([value, label]) => (
-                                        <option key={value} value={value}>
-                                            {label}
-                                        </option>
-                                    )
-                                )}
-                            </select>
+                                <select
+                                    value={action.type}
+                                    onChange={(e) =>
+                                        handleUpdateAction(
+                                            index,
+                                            'type',
+                                            e.target.value
+                                        )
+                                    }
+                                    className="form-select text-sm py-1 ml-2"
+                                >
+                                    {Object.entries(actionTypeNames).map(
+                                        ([value, label]) => (
+                                            <option key={value} value={value}>
+                                                {label}
+                                            </option>
+                                        )
+                                    )}
+                                </select>
+                            </div>
+
+                            <div className="flex items-center space-x-1">
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        setExpanded(
+                                            expanded === index ? null : index
+                                        )
+                                    }
+                                    className="btn btn-icon btn-secondary"
+                                    title={
+                                        expanded === index ? 'Fechar' : 'Editar'
+                                    }
+                                >
+                                    <PencilIcon className="h-4 w-4" />
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={() => handleRemoveAction(index)}
+                                    className="btn btn-icon btn-danger"
+                                    title="Remover"
+                                >
+                                    <TrashIcon className="h-4 w-4" />
+                                </button>
+                            </div>
                         </div>
 
-                        <div className="flex items-center space-x-2">
-                            <button
-                                type="button"
-                                onClick={() =>
-                                    setExpanded(
-                                        expanded === index ? null : index
-                                    )
-                                }
-                                className="text-gray-500 hover:text-gray-700"
-                            >
-                                {expanded === index ? 'Minimizar' : 'Editar'}
-                            </button>
-
-                            <button
-                                type="button"
-                                onClick={() => handleRemoveAction(index)}
-                                className="text-red-500 hover:text-red-700"
-                            >
-                                <TrashIcon className="h-5 w-5" />
-                            </button>
-                        </div>
+                        {expanded === index &&
+                            renderActionFields(action, index)}
                     </div>
-
-                    {expanded === index && renderActionFields(action, index)}
-                </div>
-            ))}
+                ))}
+            </div>
         </div>
     );
 };
