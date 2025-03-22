@@ -1,4 +1,4 @@
-import React, { memo } from 'react';
+import React, { memo, ReactNode } from 'react';
 import { Handle, Position, NodeProps } from 'react-flow-renderer';
 import {
     ChatAlt2Icon,
@@ -6,6 +6,9 @@ import {
     DocumentTextIcon,
     LocationMarkerIcon,
     PhotographIcon,
+    LinkIcon,
+    PhoneIcon,
+    MailIcon,
 } from '@heroicons/react/outline';
 
 interface MenuNodeData {
@@ -63,7 +66,7 @@ const MenuNodeComponent: React.FC<NodeProps<MenuNodeData>> = ({
     const hasForm = !!formType;
 
     // Count extra actions
-    const actionIcons = [];
+    const actionIcons: ReactNode[] = [];
 
     if (extraActions.length > 0) {
         extraActions.forEach((action, index) => {
@@ -72,6 +75,7 @@ const MenuNodeComponent: React.FC<NodeProps<MenuNodeData>> = ({
                     <LocationMarkerIcon
                         key={`loc-${index}`}
                         className="h-4 w-4 text-red-500"
+                        aria-label="Localização"
                     />
                 );
             } else if (action.type === 'image') {
@@ -79,13 +83,15 @@ const MenuNodeComponent: React.FC<NodeProps<MenuNodeData>> = ({
                     <PhotographIcon
                         key={`img-${index}`}
                         className="h-4 w-4 text-purple-500"
+                        aria-label="Imagem"
                     />
                 );
             } else if (action.type === 'link') {
                 actionIcons.push(
-                    <DocumentTextIcon
+                    <LinkIcon
                         key={`link-${index}`}
                         className="h-4 w-4 text-blue-500"
+                        aria-label="Link"
                     />
                 );
             } else if (action.type === 'message') {
@@ -93,6 +99,15 @@ const MenuNodeComponent: React.FC<NodeProps<MenuNodeData>> = ({
                     <ChatAlt2Icon
                         key={`msg-${index}`}
                         className="h-4 w-4 text-gray-500"
+                        aria-label="Mensagem Adicional"
+                    />
+                );
+            } else if (action.type === 'contact') {
+                actionIcons.push(
+                    <PhoneIcon
+                        key={`contact-${index}`}
+                        className="h-4 w-4 text-green-500"
+                        aria-label="Contato"
                     />
                 );
             }
@@ -142,7 +157,8 @@ const MenuNodeComponent: React.FC<NodeProps<MenuNodeData>> = ({
 
                 {actionIcons.length > 0 && (
                     <div className="mt-1 flex items-center space-x-1">
-                        {actionIcons}
+                        <span className="mr-1">Ações:</span>
+                        {actionIcons.slice(0, 3)}
                         {actionIcons.length > 3 && (
                             <span className="text-xs text-gray-500">
                                 +{actionIcons.length - 3}

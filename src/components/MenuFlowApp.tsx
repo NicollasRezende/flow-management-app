@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import MenuFlowEditor from './MenuFlowEditor';
-
+import { saveFlow } from '../api';
 interface MenuFlowAppProps {
     initialData?: Record<string, any>;
 }
@@ -78,11 +78,18 @@ const MenuFlowApp: React.FC<MenuFlowAppProps> = ({ initialData }) => {
         }
     }, []);
 
-    const handleSave = (updatedData: Record<string, any>) => {
-        setMenuData(updatedData);
-        // Save to localStorage
-        localStorage.setItem('menuFlowData', JSON.stringify(updatedData));
-        console.log('Saved menu flow data:', updatedData);
+    const handleSave = async (updatedData: Record<string, any>) => {
+        try {
+            setMenuData(updatedData);
+            // Salvar localmente para persistência em caso de reload
+            localStorage.setItem('menuFlowData', JSON.stringify(updatedData));
+            // Salvar no servidor através da API
+            await saveFlow(updatedData);
+            console.log('Saved menu flow data:', updatedData);
+        } catch (error) {
+            console.error('Error saving flow data:', error);
+            alert('Falha ao salvar os dados no servidor. Verifique o console para mais detalhes.');
+        }
     };
 
     const handleAddMenu = (menuId: string, menuType: string = 'button') => {
