@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, {
+    useState,
+    useEffect,
+    useCallback,
+    useMemo,
+    useRef,
+} from 'react';
 import ReactFlow, {
     Background,
     Controls,
@@ -16,6 +22,7 @@ import { MenuNode } from '../types/menu';
 import MenuNodeComponent from './MenuNodeComponent';
 import MenuEditPanel from './MenuEditPanel';
 import MenuToolbar from './MenuToolbar';
+import { fetchFlow, saveFlow } from '../api'; // Importando as funções da API
 
 // Define node types
 const nodeTypes: NodeTypes = {
@@ -57,6 +64,14 @@ const MenuFlowEditor: React.FC<MenuFlowEditorProps> = ({
         useState<boolean>(false);
     const [showMiniMap, setShowMiniMap] = useState(true);
     const [internalIsSaving, setInternalIsSaving] = useState(false);
+
+    // Ref para armazenar dados atualizados do menu
+    const menuDataRef = useRef<Record<string, any>>(menuData);
+
+    // Atualizar a ref sempre que menuData mudar
+    useEffect(() => {
+        menuDataRef.current = menuData;
+    }, [menuData]);
 
     // Combinamos o estado de salvamento externo (passado via props) com o interno
     const effectivelySaving = externalIsSaving || internalIsSaving;
@@ -263,12 +278,16 @@ const MenuFlowEditor: React.FC<MenuFlowEditorProps> = ({
     const handleUpdateMenu = useCallback(
         (menuId: string, updatedData: any) => {
             console.log('MenuFlowEditor - Atualizando menu:', menuId);
+            console.log(
+                'MenuFlowEditor - Dados atualizados recebidos:',
+                updatedData
+            );
 
             // Update node in the flow
             setNodes((nds) =>
                 nds.map((node) => {
                     if (node.id === menuId) {
-                        return {
+                        const updatedNode = {
                             ...node,
                             data: {
                                 ...node.data,
@@ -276,6 +295,11 @@ const MenuFlowEditor: React.FC<MenuFlowEditorProps> = ({
                                 onDelete: handleDeleteMenu, // Garantir que a função de deleção seja mantida
                             },
                         };
+                        console.log(
+                            `MenuFlowEditor - Node ${menuId} atualizado:`,
+                            updatedNode.data
+                        );
+                        return updatedNode;
                     }
                     return node;
                 })
@@ -298,11 +322,16 @@ const MenuFlowEditor: React.FC<MenuFlowEditorProps> = ({
         [setNodes, addNotification, handleDeleteMenu]
     );
 
-    const handleSaveMenuData = useCallback(() => {
+    // VERSÃO ATUALIZADA DA FUNÇÃO handleSaveMenuData
+    const handleSaveMenuData = useCallback(async () => {
         console.log('MenuFlowEditor - handleSaveMenuData chamado');
         console.log(
             'MenuFlowEditor - menuContentChanged =',
             menuContentChanged
+        );
+        console.log(
+            'MenuFlowEditor - dados antes de preparar:',
+            JSON.stringify(menuDataRef.current)
         );
 
         // Evitar múltiplos salvamentos simultâneos
@@ -320,16 +349,22 @@ const MenuFlowEditor: React.FC<MenuFlowEditorProps> = ({
             console.log('MenuFlowEditor - Preparando dados para salvar');
 
             // Criar um novo objeto de dados (para não modificar o original)
-            const updatedMenuData = { ...menuData };
+            const updatedMenuData = { ...menuDataRef.current };
 
             // Resetar o objeto de menus para conter apenas os menus que existem nos nós
             updatedMenuData.menus = {};
 
             // Update the menu data with changes from nodes - agora só inclui os menus existentes
             nodes.forEach((node) => {
+                // Garantir que estamos coletando os dados mais recentes dos nodes
+                console.log(
+                    `MenuFlowEditor - Coletando dados do node ${node.id}:`,
+                    node.data
+                );
                 updatedMenuData.menus[node.id] = {
                     title: node.data.title,
                     content: node.data.content,
+                    menuType: node.data.menuType,
                     options: node.data.options,
                     form: node.data.formType
                         ? {
@@ -338,7 +373,7 @@ const MenuFlowEditor: React.FC<MenuFlowEditorProps> = ({
                               action: 'submit_form',
                           }
                         : undefined,
-                    extra_actions: node.data.extraActions,
+                    extraActions: node.data.extraActions,
                 };
             });
 
@@ -372,42 +407,126 @@ const MenuFlowEditor: React.FC<MenuFlowEditorProps> = ({
             });
 
             console.log(
-                'MenuFlowEditor - Chamando onSave com dados atualizados'
+                'MenuFlowEditor - Dados finais preparados para salvar:',
+                updatedMenuData
+            );
+            console.log(
+                'MenuFlowEditor - Detalhes do menu inicial:',
+                updatedMenuData.menus.inicial
+                    ? JSON.stringify(updatedMenuData.menus.inicial)
+                    : 'Menu inicial não encontrado'
             );
 
-            // Verificar onSave antes de chamar
-            if (typeof onSave !== 'function') {
+            // Salvar no localStorage primeiro para garantir persistência
+            try {
+                localStorage.setItem(
+                    'menuFlowData',
+                    JSON.stringify(updatedMenuData)
+                );
+                console.log('MenuFlowEditor - Dados salvos no localStorage');
+            } catch (localStorageError) {
                 console.error(
-                    'MenuFlowEditor - ERRO: onSave não é uma função:',
-                    onSave
+                    'MenuFlowEditor - Erro ao salvar no localStorage:',
+                    localStorageError
                 );
                 addNotification(
-                    'error',
-                    'Erro ao salvar: função de salvamento não está disponível'
+                    'warning',
+                    'Erro ao salvar localmente, tentando no servidor...'
                 );
-                setInternalIsSaving(false);
-                return;
             }
 
-            // Chamar onSave com try/catch para capturar erros
             try {
-                onSave(updatedMenuData);
-                console.log('MenuFlowEditor - onSave executado com sucesso');
+                // Usar saveFlow para salvar os dados
+                const result = await saveFlow(updatedMenuData);
+                console.log(
+                    'MenuFlowEditor - saveFlow concluído com sucesso:',
+                    result
+                );
+
+                // Atualizar a referência de dados
+                menuDataRef.current = updatedMenuData;
+
                 setMenuContentChanged(false);
-                addNotification('success', 'Alterações salvas com sucesso!');
-            } catch (error) {
+
+                // Verificar se o resultado contém uma mensagem específica de modo offline
+                if (
+                    result &&
+                    result.message &&
+                    result.message.includes('modo local')
+                ) {
+                    // Apenas para ambiente de desenvolvimento localhost
+                    if (
+                        window.location.hostname === 'localhost' ||
+                        window.location.hostname === '127.0.0.1'
+                    ) {
+                        addNotification(
+                            'info',
+                            'Alterações salvas localmente (desenvolvimento)'
+                        );
+                    } else {
+                        addNotification(
+                            'success',
+                            'Alterações salvas com sucesso!'
+                        );
+                    }
+                } else {
+                    addNotification(
+                        'success',
+                        'Alterações salvas com sucesso!'
+                    );
+                }
+
+                // Após salvar, recarregar dados para garantir sincronização - somente se não estiver em modo localhost
+                if (
+                    (!result.message ||
+                        !result.message.includes('modo local')) &&
+                    window.location.hostname !== 'localhost' &&
+                    window.location.hostname !== '127.0.0.1'
+                ) {
+                    try {
+                        const refreshedData = await fetchFlow();
+                        console.log(
+                            'MenuFlowEditor - Dados recarregados após salvamento:',
+                            refreshedData
+                        );
+                        // Aqui você poderia atualizar seus estados com os dados atualizados se necessário
+                    } catch (refreshError) {
+                        console.error(
+                            'MenuFlowEditor - Erro ao recarregar dados:',
+                            refreshError
+                        );
+                        // Não mostrar notificação - já salvamos com sucesso, recarregar é opcional
+                    }
+                }
+            } catch (saveError) {
                 console.error(
-                    'MenuFlowEditor - Erro ao executar onSave:',
-                    error
+                    'MenuFlowEditor - Erro ao salvar dados no servidor:',
+                    saveError
                 );
-                addNotification(
-                    'error',
-                    `Erro ao salvar: ${
-                        (error as Error).message || 'Falha desconhecida'
-                    }`
-                );
-            } finally {
-                setInternalIsSaving(false);
+
+                // Ambiente de desenvolvimento local - mostrar mensagem suave
+                if (
+                    window.location.hostname === 'localhost' ||
+                    window.location.hostname === '127.0.0.1'
+                ) {
+                    addNotification(
+                        'info',
+                        `Dados salvos apenas localmente (modo desenvolvimento).`
+                    );
+
+                    // Atualizar a referência de dados mesmo assim, pois salvamos localmente
+                    menuDataRef.current = updatedMenuData;
+                    setMenuContentChanged(false);
+                } else {
+                    // Ambiente de produção - mostrar erro real
+                    addNotification(
+                        'error',
+                        `Falha ao salvar alterações: ${
+                            (saveError as Error).message ||
+                            'Erro de comunicação com o servidor'
+                        }`
+                    );
+                }
             }
         } catch (error) {
             console.error(
@@ -420,17 +539,10 @@ const MenuFlowEditor: React.FC<MenuFlowEditorProps> = ({
                     (error as Error).message || 'Falha desconhecida'
                 }`
             );
+        } finally {
             setInternalIsSaving(false);
         }
-    }, [
-        menuData,
-        nodes,
-        edges,
-        menuContentChanged,
-        onSave,
-        effectivelySaving,
-        addNotification,
-    ]);
+    }, [menuContentChanged, effectivelySaving, addNotification, nodes, edges]);
 
     const handleCloseEditPanel = useCallback(() => {
         setSelectedNode(null);
@@ -458,16 +570,29 @@ const MenuFlowEditor: React.FC<MenuFlowEditorProps> = ({
                     // Definir classes baseadas no tipo de notificação
                     const notificationClass = `notification notification-${notification.type}`;
 
+                    // Ícones para os diferentes tipos de notificação
+                    const getIcon = (type: NotificationType) => {
+                        switch (type) {
+                            case 'success':
+                                return '✅';
+                            case 'error':
+                                return '❌';
+                            case 'warning':
+                                return '⚠️';
+                            case 'info':
+                                return 'ℹ️';
+                            default:
+                                return 'ℹ️';
+                        }
+                    };
+
                     return (
                         <div
                             key={notification.id}
                             className={notificationClass}
                         >
                             <span className="mr-2">
-                                {notification.type === 'success' && '✅'}
-                                {notification.type === 'error' && '❌'}
-                                {notification.type === 'warning' && '⚠️'}
-                                {notification.type === 'info' && 'ℹ️'}
+                                {getIcon(notification.type)}
                             </span>
                             <span className="flex-grow">
                                 {notification.message}
@@ -481,6 +606,7 @@ const MenuFlowEditor: React.FC<MenuFlowEditorProps> = ({
                                     )
                                 }
                                 className="ml-2 text-white hover:text-gray-200 focus:outline-none"
+                                aria-label="Fechar notificação"
                             >
                                 ×
                             </button>

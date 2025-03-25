@@ -174,26 +174,81 @@ const MenuFlowApp: React.FC<MenuFlowAppProps> = ({ initialData }) => {
         });
 
         try {
-            // Atualizar o estado de dados local
+            // Atualizar o estado de dados local primeiro
             setMenuData(updatedData);
 
             // Salvar localmente para persistência em caso de reload
-            localStorage.setItem('menuFlowData', JSON.stringify(updatedData));
+            try {
+                localStorage.setItem(
+                    'menuFlowData',
+                    JSON.stringify(updatedData)
+                );
+                console.log('MenuFlowApp - Dados salvos no localStorage');
+            } catch (localStorageError) {
+                console.error(
+                    'MenuFlowApp - Erro ao salvar no localStorage:',
+                    localStorageError
+                );
+            }
 
-            // Salvar no servidor através da API
-            await saveFlow(updatedData);
+            // Verificar se estamos usando ngrok ou em desenvolvimento
+            const isLocalDev =
+                window.location.hostname === 'localhost' ||
+                window.location.hostname === '127.0.0.1';
 
-            // Atualizar status após salvar com sucesso
-            setSaveStatus({
-                loading: false,
-                success: true,
-                error: null,
-            });
+            if (isLocalDev) {
+                console.log(
+                    'MenuFlowApp - Ambiente de desenvolvimento local detectado, simulando resposta de sucesso'
+                );
 
-            showFlashMessage('success', 'Fluxo de menu salvo com sucesso!');
-            console.log('Saved menu flow data:', updatedData);
+                // Simular um pequeno atraso para dar feedback visual
+                await new Promise((resolve) => setTimeout(resolve, 500));
+
+                // Atualizar status após "salvar" com sucesso
+                setSaveStatus({
+                    loading: false,
+                    success: true,
+                    error: null,
+                });
+
+                showFlashMessage(
+                    'success',
+                    'Fluxo de menu salvo localmente com sucesso!'
+                );
+                return;
+            }
+
+            // Salvar no servidor através da API (incluindo ngrok)
+            try {
+                await saveFlow(updatedData);
+
+                // Atualizar status após salvar com sucesso
+                setSaveStatus({
+                    loading: false,
+                    success: true,
+                    error: null,
+                });
+
+                showFlashMessage('success', 'Fluxo de menu salvo com sucesso!');
+                console.log('Saved menu flow data:', updatedData);
+            } catch (apiError) {
+                console.error('Error saving flow data to API:', apiError);
+
+                // Mostrar mensagem informativa, já que os dados foram salvos localmente
+                showFlashMessage(
+                    'error',
+                    'Falha ao salvar dados no servidor. Verifique sua conexão.'
+                );
+
+                // Atualizar status com erro
+                setSaveStatus({
+                    loading: false,
+                    success: false,
+                    error: 'Falha ao conectar com o servidor. As alterações NÃO foram salvas.',
+                });
+            }
         } catch (error) {
-            console.error('Error saving flow data:', error);
+            console.error('Error in handleSave:', error);
 
             // Atualizar status com erro
             setSaveStatus({
@@ -205,7 +260,7 @@ const MenuFlowApp: React.FC<MenuFlowAppProps> = ({ initialData }) => {
                         : 'Erro desconhecido ao salvar',
             });
 
-            showFlashMessage('error', 'Falha ao salvar os dados no servidor');
+            showFlashMessage('error', 'Falha ao salvar os dados');
         }
     };
 

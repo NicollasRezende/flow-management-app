@@ -187,6 +187,10 @@ const MenuEditPanel: React.FC<MenuEditPanelProps> = ({
 
         try {
             console.log('MenuEditPanel - Construindo objeto de opções');
+            console.log(
+                'MenuEditPanel - Dados atuais do formulário:',
+                formData
+            );
 
             // Construct options based on menu type
             let options: MenuOptions;
@@ -253,7 +257,29 @@ const MenuEditPanel: React.FC<MenuEditPanelProps> = ({
                 extraActions: formData.extraActions,
             };
 
+            console.log(
+                'MenuEditPanel - Dados finalizados para envio:',
+                updateData
+            );
+            console.log(
+                'MenuEditPanel - Chamando onUpdate com node.id:',
+                node.id
+            );
+
             onUpdate(node.id, updateData);
+
+            // Feedback visual para o usuário
+            const saveButton = document.querySelector(
+                '[data-testid="edit-panel-save-button"]'
+            );
+            if (saveButton) {
+                saveButton.textContent = '✓ Alterações Salvas';
+                setTimeout(() => {
+                    if (saveButton.textContent === '✓ Alterações Salvas') {
+                        saveButton.textContent = 'Salvar Alterações';
+                    }
+                }, 2000);
+            }
         } catch (error) {
             console.error(
                 'MenuEditPanel - Erro ao processar dados para salvar:',
